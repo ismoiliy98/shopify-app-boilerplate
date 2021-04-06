@@ -6,9 +6,8 @@ import querystring from 'querystring'
 import sha256 from 'crypto-js/sha256'
 import hmacSHA512 from 'crypto-js/hmac-sha512'
 import Base64 from 'crypto-js/enc-base64'
-import { shopExists } from '@database/shop'
+import { activateShop, getExistingShop } from '@database/shop'
 import { validateShopParam } from '@utils/shop'
-import { registerUninstallWebhook } from '@utils/webhooks'
 
 const log = createLogger('ROUTES:AUTH')
 
@@ -42,6 +41,16 @@ const getAuthRedirectRoute = async (
   return authRoute
 }
 
+const redirectToOfflineAuth = (req: Request, res: Response, shop: string) => {
+  const redSec = getEncryptionForShop(shop)
+  const query = querystring.stringify({
+    ...req.query,
+    redSec
+  })
+
+  return res.redirect('/auth/offline?' + query)
+}
+
 const getAuthRoutes = () => {
   log.info('Configuring auth routes')
   const router = Router()
@@ -57,7 +66,7 @@ const getAuthRoutes = () => {
         return topLevelRedirect(
           res,
           shop,
-          `https://${Shopify.Context.HOST_NAME}/auth?shop=${shop}`,
+          `https://${Shopify.Context.HOST_NAME}${req.originalUrl}`,
           Shopify.Context.API_KEY
         )
       }
@@ -65,16 +74,15 @@ const getAuthRoutes = () => {
       delete redirected[shop]
 
       try {
-        const exists = await shopExists(shop)
+        if (req.query.updateOfflineToken) {
+          delete req.query.updateOfflineToken
+          return redirectToOfflineAuth(req, res, shop)
+        }
 
-        if (!exists) {
-          const redSec = getEncryptionForShop(shop)
-          const query = querystring.stringify({
-            ...req.query,
-            redSec
-          })
+        const exists = await getExistingShop(shop)
 
-          return res.redirect('/auth/offline?' + query)
+        if (!exists?.installed) {
+          return redirectToOfflineAuth(req, res, shop)
         }
 
         const authRoute = await getAuthRedirectRoute(req, res, shop)
@@ -119,7 +127,12 @@ const getAuthRoutes = () => {
 
       try {
         await Shopify.Auth.validateAuthCallback(req, res, query)
-        await registerUninstallWebhook(shop)
+
+        const shopData = await getExistingShop(shop)
+
+        if (shopData && !shopData.installed) {
+          await activateShop(shop)
+        }
 
         const authRoute = await getAuthRedirectRoute(req, res, shop)
         return res.redirect(authRoute)

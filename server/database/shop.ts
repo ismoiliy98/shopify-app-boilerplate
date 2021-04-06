@@ -1,18 +1,19 @@
 import ShopModel from '@database/models/Shop'
 import { createLogger } from '@utils/logger'
+import { registerUninstallWebhook } from '@utils/webhooks'
 
 const log = createLogger('DB:SESSION')
 
-export const shopExists = async (shop: string) => {
+export const getExistingShop = async (name: string) => {
   try {
-    const result = await ShopModel.exists({
-      name: shop
+    const result = await ShopModel.findOne({
+      name
     })
 
     return result
   } catch (error) {
     log.error(error)
-    return false
+    return null
   }
 }
 
@@ -27,6 +28,21 @@ export const createShop = async (name: string) => {
   } catch (error) {
     log.error(error)
     return null
+  }
+}
+
+export const activateShop = async (shop: string) => {
+  try {
+    const shopData = await getExistingShop(shop)
+
+    if (shopData) {
+      shopData.installed = true
+      await shopData.save()
+    }
+
+    await registerUninstallWebhook(shop)
+  } catch (error) {
+    log.error(error)
   }
 }
 

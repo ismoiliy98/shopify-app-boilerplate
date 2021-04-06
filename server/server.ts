@@ -23,7 +23,6 @@ class Server {
     this.port = serverSettings.serverPort
     this.app = express()
 
-    log.info(serverSettings.clientPath)
     this.nextServer = next({
       dev: serverSettings.isDevelopment,
       dir: serverSettings.clientPath
@@ -66,7 +65,9 @@ class Server {
     this.app = express()
 
     this.app.use((req: Request, _: Response, next: NextFunction) => {
-      log.info(`${req.method}:${req.url}`)
+      if (!req.url.startsWith('/_next/')) {
+        log.info(`${req.method}:${req.url}`)
+      }
       next()
     })
 

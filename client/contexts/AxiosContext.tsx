@@ -3,6 +3,7 @@ import { Redirect } from '@shopify/app-bridge/actions'
 import { getSessionToken } from '@shopify/app-bridge-utils'
 import { useAppBridge } from '@shopify/app-bridge-react'
 import axios, { AxiosError, AxiosInstance } from 'axios'
+import querystring from 'querystring'
 
 interface IAxiosProviderProps {
   apiKey: string
@@ -36,11 +37,20 @@ export const AxiosProvider: FunctionComponent<IAxiosProviderProps> = (
     coreInstace.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          redirect.dispatch(
-            Redirect.Action.REMOTE,
-            `https://${shopOrigin}/admin/apps/${apiKey}/auth?shop=${shopOrigin}`
-          )
+        if (error.response) {
+          const { status } = error.response
+
+          if (status === 401 || status === 426) {
+            const query = querystring.stringify({
+              shop: shopOrigin,
+              ...(status === 426 && { updateOfflineToken: true })
+            })
+
+            redirect.dispatch(
+              Redirect.Action.REMOTE,
+              `https://${shopOrigin}/admin/apps/${apiKey}/auth?${query}`
+            )
+          }
         }
 
         throw error

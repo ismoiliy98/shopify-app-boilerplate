@@ -1,4 +1,4 @@
-import { removeShop, shopExists } from '@database/shop'
+import { removeShop, getExistingShop } from '@database/shop'
 import Shopify from '@shopify/shopify-api'
 import { createLogger } from './logger'
 import { NextFunction, Request, Response } from 'express'
@@ -26,18 +26,19 @@ export const validateShopInstall = () => async (
   next: NextFunction
 ) => {
   const shop = req.query.shop as string
+  const authPath = `/auth?shop=${shop}&updateOfflineToken=true`
 
   try {
-    const exist = await shopExists(shop)
+    const exist = await getExistingShop(shop)
 
-    if (!exist) {
-      topLevelRedirect(res, shop, `/auth?shop${shop}`, Shopify.Context.API_KEY)
+    if (!exist?.installed) {
+      topLevelRedirect(res, shop, authPath, Shopify.Context.API_KEY)
     } else {
       next()
     }
   } catch (error) {
     log.error(error)
-    topLevelRedirect(res, shop, `/auth?shop${shop}`, Shopify.Context.API_KEY)
+    topLevelRedirect(res, shop, authPath, Shopify.Context.API_KEY)
   }
 }
 
@@ -57,7 +58,13 @@ export const validateShopAuth = () => async (
     ) {
       next()
     } else {
-      res.status(401).send('Unauthorized')
+      let status = 401
+
+      if (session && !Shopify.Context.SCOPES.equals(session.scope)) {
+        status = 426
+      }
+
+      res.status(status).send('Unauthorized')
     }
   } catch (error) {
     log.error(error)

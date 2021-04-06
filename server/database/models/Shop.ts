@@ -4,6 +4,7 @@ import { Schema, model, Document } from 'mongoose'
 export interface IShopModel extends Document {
   _id: string
   name: string
+  installed: boolean
   offlineSession: IOfflineSession | undefined
   onlineSession: IOnlineSession | undefined
 }
@@ -31,6 +32,10 @@ const ShopSchema = new Schema({
   name: {
     type: String,
     required: true
+  },
+  installed: {
+    type: Boolean,
+    default: false
   },
   offlineSession: {
     type: OfflineSessionSchema,

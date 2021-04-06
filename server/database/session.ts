@@ -3,7 +3,7 @@ import { IOfflineSession, IOnlineSession } from '@interfaces/Session'
 import { Session } from '@shopify/shopify-api/dist/auth/session'
 import { createLogger } from '@utils/logger'
 import { FilterQuery } from 'mongoose'
-import { createShop, shopExists } from './shop'
+import { createShop, getExistingShop } from './shop'
 
 const log = createLogger('DB:SESSION')
 
@@ -22,12 +22,11 @@ export const saveSession = async (session: Session) => {
   const cursor = (isOnline && 'onlineSession') || 'offlineSession'
 
   try {
-    const exists = await shopExists(shop)
-    const shopData = await (!exists
-      ? createShop(shop)
-      : ShopModel.findOne({
-          name: shop
-        }))
+    let shopData = await getExistingShop(shop)
+
+    if (!shopData) {
+      shopData = await createShop(shop)
+    }
 
     if (!shopData) {
       throw new Error(`Unable to create / find shop: ${shop}`)
